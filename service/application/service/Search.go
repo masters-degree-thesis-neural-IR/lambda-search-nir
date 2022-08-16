@@ -10,12 +10,14 @@ import (
 )
 
 type Search struct {
-	IndexRepository repositories.IndexRepository
+	IndexRepository    repositories.IndexRepository
+	DocumentRepository repositories.DocumentRepository
 }
 
-func NewSearch(indexRepository repositories.IndexRepository) usecases.SearchUc {
+func NewSearch(indexRepository repositories.IndexRepository, documentRepository repositories.DocumentRepository) usecases.SearchUc {
 	return Search{
-		IndexRepository: indexRepository,
+		IndexRepository:    indexRepository,
+		DocumentRepository: documentRepository,
 	}
 }
 
@@ -63,5 +65,25 @@ func (s Search) SearchDocument(query string) ([]domain.QueryResult, error) {
 		return nil, *exception.ThrowValidationError(err.Error())
 	}
 
-	return nlp.SortDesc(nlp.ScoreBM25(localQuery, &invertedIndex)), nil
+	queryResults := nlp.SortDesc(nlp.ScoreBM25(localQuery, &invertedIndex))
+	tempQueryResults := make([]domain.QueryResult, len(queryResults))
+
+	for i, queryResult := range queryResults {
+		doc, err := s.DocumentRepository.FindById(queryResult.NormalizedDocument.Id)
+
+		if doc == nil {
+			continue
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		tempQueryResults[i].Similarity = queryResult.Similarity
+		tempQueryResults[i].NormalizedDocument = queryResult.NormalizedDocument
+		tempQueryResults[i].Document = *doc
+
+	}
+
+	return tempQueryResults, nil
 }

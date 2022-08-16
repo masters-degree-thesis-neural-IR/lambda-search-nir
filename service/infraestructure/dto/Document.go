@@ -1,7 +1,7 @@
 package dto
 
 type Document struct {
-	Id    string
-	Title string
-	Body  string
+	Id    string `json:"id"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
 }
