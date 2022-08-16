@@ -3,12 +3,11 @@ package main
 import (
 	"encoding/json"
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"lambda-search-nir/service/application/exception"
+	"lambda-search-nir/service/application/service"
 	"lambda-search-nir/service/infraestructure/dto"
-	"lambda-search-nir/service/infraestructure/sns"
+	"lambda-search-nir/service/infraestructure/dydb"
 	"log"
 	"net/http"
 )
@@ -57,36 +56,36 @@ func makeBody(body string) (dto.Document, error) {
 
 func handler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	if req.HTTPMethod != "POST" {
-		return events.APIGatewayProxyResponse{
-			StatusCode: http.StatusBadRequest,
-			Headers:    map[string]string{"Content-Type": "text/plain; charset=utf-8"},
-			Body:       "Invalid HTTP Method",
-		}, nil
-	}
-
-	document, err := makeBody(req.Body)
-
-	if err != nil {
-		return ErrorHandler(err), nil
-	}
-
-	awsSession, err := session.NewSession(&aws.Config{
-		Region: aws.String(AwsRegion)},
-	)
-
-	if err != nil {
-		return ErrorHandler(err), nil
-	}
-
-	repository := dydb.NewDocumentRepository(awsSession, TableName)
-	documentEvent := sns.NewDocumentEvent(awsSession, TopicArn)
-	documentService := service.NewDocumentService(documentEvent, repository)
-	err = documentService.CreateDocument(document.Title, document.Body)
-
-	if err != nil {
-		return ErrorHandler(err), nil
-	}
+	//if req.HTTPMethod != "POST" {
+	//	return events.APIGatewayProxyResponse{
+	//		StatusCode: http.StatusBadRequest,
+	//		Headers:    map[string]string{"Content-Type": "text/plain; charset=utf-8"},
+	//		Body:       "Invalid HTTP Method",
+	//	}, nil
+	//}
+	//
+	//document, err := makeBody(req.Body)
+	//
+	//if err != nil {
+	//	return ErrorHandler(err), nil
+	//}
+	//
+	//awsSession, err := session.NewSession(&aws.Config{
+	//	Region: aws.String(AwsRegion)},
+	//)
+	//
+	//if err != nil {
+	//	return ErrorHandler(err), nil
+	//}
+	//
+	//repository := dydb.NewDocumentRepository(awsSession, TableName)
+	//documentEvent := sns.NewDocumentEvent(awsSession, TopicArn)
+	//documentService := service.NewDocumentService(documentEvent, repository)
+	//err = documentService.CreateDocument(document.Title, document.Body)
+	//
+	//if err != nil {
+	//	return ErrorHandler(err), nil
+	//}
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: http.StatusCreated,
@@ -100,5 +99,31 @@ func main() {
 	AwsRegion = "us-east-1"
 	TopicArn = "arn:aws:sns:us-east-1:149501088887:mestrado-document-created" //os.Getenv("BAR")
 	TableName = "NIR_Document"
-	lambda.Start(handler)
+
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}))
+
+	repository := dydb.NewIndexRepository(sess, TableName)
+
+	log.Fatalln("Criou o repository?")
+
+	service := service.NewSearch(repository)
+
+	log.Fatalln("Criou o service?", service != nil)
+
+	query := "penitenciaria plano"
+	results, err := service.SearchDocument(query)
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	for _, result := range results {
+		println("****** Query ******")
+		println(".....: ", result.Similarity)
+		println(".....: ", result.NormalizedDocument.Tf)
+	}
+
+	//lambda.Start(handler)
 }

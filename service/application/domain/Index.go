@@ -2,5 +2,5 @@ package domain
 
 type Index struct {
 	Term      string
-	Documents []Document
+	Documents []NormalizedDocument
 }

@@ -1,4 +1,4 @@
-package service
+package nlp
 
 import (
 	"golang.org/x/text/runes"
@@ -6,65 +6,12 @@ import (
 	"golang.org/x/text/unicode/norm"
 	"lambda-search-nir/service/application/domain"
 	"lambda-search-nir/service/application/exception"
-	"lambda-search-nir/service/application/repositories"
+	"lambda-search-nir/service/application/score"
 	"lambda-search-nir/service/application/stopwords"
-	"lambda-search-nir/service/application/usecases"
+	"math"
 	"strings"
 	"unicode"
 )
-
-type IndexService struct {
-	IndexRepository repositories.IndexRepository
-}
-
-func NewIndexService(indexRepository repositories.IndexRepository) usecases.CreateIndexUc {
-	var c usecases.CreateIndexUc = IndexService{
-		IndexRepository: indexRepository,
-	}
-	return c
-}
-
-func (i IndexService) CreateIndex(id string, title string, body string) error {
-
-	tokens := Tokenizer(body, true)
-	normalizedTokens, err := RemoveStopWords(tokens, "pt")
-
-	if err != nil {
-		return err
-	}
-
-	document := domain.Document{
-		Id:     id,
-		Length: len(normalizedTokens),
-		Tf:     TermFrequency(normalizedTokens),
-	}
-
-	for _, term := range normalizedTokens {
-
-		index, err := i.IndexRepository.FindByTerm(term)
-
-		if err != nil {
-			return err
-		}
-
-		if index != nil {
-			documentList := index.Documents
-			if NotContains(document, documentList) {
-				index.Term = term
-				index.Documents = append(documentList, document)
-				i.IndexRepository.Update(*index)
-			}
-		} else {
-			index := domain.Index{
-				Term:      term,
-				Documents: []domain.Document{document},
-			}
-			i.IndexRepository.Save(index)
-		}
-	}
-
-	return nil
-}
 
 func NotContains(document domain.Document, documents []domain.Document) bool {
 
@@ -159,4 +106,39 @@ func TermFrequency(tokens []string) map[string]int {
 
 	return localMap
 
+}
+
+func CalcIdf(df map[string]int, corpusSize int) map[string]float64 {
+
+	idf := make(map[string]float64)
+
+	for term, frequency := range df {
+		//idf[term] = math.log(1 + (corpus_size - freq + 0.5) / (freq + 0.5))
+		freq := float64(frequency) + 0.5
+		corpusSize := float64(corpusSize)
+		idf[term] = math.Log(1 + (corpusSize-freq)/freq)
+	}
+
+	return idf
+
+}
+
+func ScoreBM25(query []string, invertedIndex *domain.InvertedIndex) []domain.QueryResult {
+
+	queryResults := make([]domain.QueryResult, invertedIndex.CorpusSize)
+
+	var i = 0
+	for _, doc := range invertedIndex.NormalizedDocumentFound {
+
+		score := score.BM25(query, &doc, invertedIndex.Idf, invertedIndex.CorpusSize, 0.75, 1.5)
+
+		queryResults[i] = domain.QueryResult{
+			Similarity:         score,
+			NormalizedDocument: doc,
+		}
+		i++
+
+	}
+
+	return queryResults
 }
