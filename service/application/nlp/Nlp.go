@@ -9,6 +9,7 @@ import (
 	"lambda-search-nir/service/application/score"
 	"lambda-search-nir/service/application/stopwords"
 	"math"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -141,4 +142,11 @@ func ScoreBM25(query []string, invertedIndex *domain.InvertedIndex) []domain.Que
 	}
 
 	return queryResults
+}
+
+func SortDesc(results []domain.QueryResult) []domain.QueryResult {
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Similarity > results[j].Similarity
+	})
+	return results
 }

@@ -98,7 +98,7 @@ func handler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse,
 func main() {
 	AwsRegion = "us-east-1"
 	TopicArn = "arn:aws:sns:us-east-1:149501088887:mestrado-document-created" //os.Getenv("BAR")
-	TableName = "NIR_Document"
+	TableName = "NIR_Index"
 
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -106,13 +106,8 @@ func main() {
 
 	repository := dydb.NewIndexRepository(sess, TableName)
 
-	log.Fatalln("Criou o repository?")
-
 	service := service.NewSearch(repository)
-
-	log.Fatalln("Criou o service?", service != nil)
-
-	query := "penitenciaria plano"
+	query := "plano federal"
 	results, err := service.SearchDocument(query)
 
 	if err != nil {
@@ -120,9 +115,9 @@ func main() {
 	}
 
 	for _, result := range results {
-		println("****** Query ******")
-		println(".....: ", result.Similarity)
-		println(".....: ", result.NormalizedDocument.Tf)
+		log.Println("****** Query ******")
+		log.Println("..... Similaridade : ", result.Similarity)
+		log.Println("..... ID: ", result.NormalizedDocument.Id)
 	}
 
 	//lambda.Start(handler)

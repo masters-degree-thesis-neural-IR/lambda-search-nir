@@ -19,7 +19,7 @@ func NewSearch(indexRepository repositories.IndexRepository) usecases.SearchUc {
 	}
 }
 
-func (s Search) MakeInvertedIndex(localQuery []string) (*domain.InvertedIndex, error) {
+func (s Search) MakeInvertedIndex(localQuery []string) (domain.InvertedIndex, error) {
 
 	invertedIndex := domain.InvertedIndex{
 		Df:                      map[string]int{},
@@ -28,32 +28,29 @@ func (s Search) MakeInvertedIndex(localQuery []string) (*domain.InvertedIndex, e
 		CorpusSize:              0,
 	}
 
-	normalizedDocumentFound := make(map[string]domain.NormalizedDocument)
-
 	for _, qTerm := range localQuery {
 
 		index, err := s.IndexRepository.FindByTerm(qTerm)
 
 		if err != nil {
 			log.Fatalln("Error....: ", err)
-			return nil, err
+			return invertedIndex, err
 		}
-
-		log.Println("Achou o index? ", index != nil)
 
 		if index != nil {
 			invertedIndex.Df[index.Term] = len(index.Documents)
 			invertedIndex.Terms[index.Term] = index.Documents
 
 			for _, document := range index.Documents {
-				normalizedDocumentFound[document.Id] = document
+				invertedIndex.NormalizedDocumentFound[document.Id] = document
 			}
 		}
 	}
 
-	invertedIndex.CorpusSize = len(normalizedDocumentFound)
+	invertedIndex.CorpusSize = len(invertedIndex.NormalizedDocumentFound)
 	invertedIndex.Idf = nlp.CalcIdf(invertedIndex.Df, invertedIndex.CorpusSize)
-	return &invertedIndex, nil
+
+	return invertedIndex, nil
 
 }
 
@@ -66,5 +63,5 @@ func (s Search) SearchDocument(query string) ([]domain.QueryResult, error) {
 		return nil, *exception.ThrowValidationError(err.Error())
 	}
 
-	return nlp.ScoreBM25(localQuery, invertedIndex), nil
+	return nlp.SortDesc(nlp.ScoreBM25(localQuery, &invertedIndex)), nil
 }
