@@ -1,0 +1,27 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo ***** INSTALL ******
+      - curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
+      - apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+      - apt-get update
+      - apt-get install terraform=0.14.8
+      - terraform -v
+      - wget https://golang.org/dl/go1.18.linux-amd64.tar.gz
+      - tar -C /usr/local -xvzf go1.18.linux-amd64.tar.gz
+      - echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.profile
+      - source ~/.profile
+      - go version
+  build:
+    commands:
+      - echo ***** APPLICATION BUILD ******
+      - go mod download
+      - GOOS=linux GOARCH=amd64 go build -o bin/app main.go
+      - echo ***** TERRAFORM BUILD ******
+      - cd terraform
+      - terraform init -backend=true -backend-config="$BACKEND"
+      - terraform validate
+      - terraform plan -var="lambda_name=$LAMBDA_NAME" -var="local_environment=$ENVIRONMENT" -var="aws_region=$REGION" -out="plan.tfout"
+      - terraform apply plan.tfout
