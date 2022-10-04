@@ -5,15 +5,15 @@ type ValidationError struct {
 	Message    string
 }
 
-func ThrowValidationError(message string) *error {
+func ThrowValidationError(message string) error {
 
-	var err error = &ValidationError{
+	var err error = ValidationError{
 		StatusCode: 400,
 		Message:    message,
 	}
-	return &err
+	return err
 }
 
-func (e *ValidationError) Error() string {
+func (e ValidationError) Error() string {
 	return e.Message
 }

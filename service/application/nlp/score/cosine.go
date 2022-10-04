@@ -1,11 +1,23 @@
 package score
 
 import (
-	"errors"
 	"math"
 )
 
-func CosineSimilarity(a []float64, b []float64) (cosine float64, err error) {
+func CosineSimilarity(x, y []float64) float64 {
+	var sum, s1, s2 float64
+	for i := 0; i < len(x); i++ {
+		sum += x[i] * y[i]
+		s1 += math.Pow(x[i], 2)
+		s2 += math.Pow(y[i], 2)
+	}
+	if s1 == 0 || s2 == 0 {
+		return 0.0
+	}
+	return sum / (math.Sqrt(s1) * math.Sqrt(s2))
+}
+
+func cosineSimilarity(a []float64, b []float64) float64 {
 	count := 0
 	lengthA := len(a)
 	lengthB := len(b)
@@ -31,7 +43,7 @@ func CosineSimilarity(a []float64, b []float64) (cosine float64, err error) {
 		s2 += math.Pow(b[k], 2)
 	}
 	if s1 == 0 || s2 == 0 {
-		return 0.0, errors.New("Vectors should not be null (all zeros)")
+		return 0.0
 	}
-	return sumA / (math.Sqrt(s1) * math.Sqrt(s2)), nil
+	return sumA / (math.Sqrt(s1) * math.Sqrt(s2))
 }
