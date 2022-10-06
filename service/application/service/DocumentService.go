@@ -31,6 +31,12 @@ func (s DocumentService) LoadDocuments(scoreResult []domain.ScoreResult) ([]doma
 
 	documents, err := s.DocumentRepository.FindByDocumentIDs(documentIDs)
 
+	println("Documents")
+	for _, doc := range documents {
+		println(doc.Id)
+	}
+	println("--------")
+
 	s.Logger.Info("Total documentos: ", len(documents))
 
 	if err != nil {

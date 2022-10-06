@@ -22,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DataServiceClient interface {
+	GetsData(ctx context.Context, in *RequestDataKeyList, opts ...grpc.CallOption) (*ResponseDataValueList, error)
 	GetData(ctx context.Context, in *RequestDataKey, opts ...grpc.CallOption) (*ResponseDataValue, error)
 	SetData(ctx context.Context, in *RequestDataKeyValue, opts ...grpc.CallOption) (*ResponseEmpty, error)
 }
@@ -32,6 +33,15 @@ type dataServiceClient struct {
 
 func NewDataServiceClient(cc grpc.ClientConnInterface) DataServiceClient {
 	return &dataServiceClient{cc}
+}
+
+func (c *dataServiceClient) GetsData(ctx context.Context, in *RequestDataKeyList, opts ...grpc.CallOption) (*ResponseDataValueList, error) {
+	out := new(ResponseDataValueList)
+	err := c.cc.Invoke(ctx, "/speedup.DataService/GetsData", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *dataServiceClient) GetData(ctx context.Context, in *RequestDataKey, opts ...grpc.CallOption) (*ResponseDataValue, error) {
@@ -56,6 +66,7 @@ func (c *dataServiceClient) SetData(ctx context.Context, in *RequestDataKeyValue
 // All implementations must embed UnimplementedDataServiceServer
 // for forward compatibility
 type DataServiceServer interface {
+	GetsData(context.Context, *RequestDataKeyList) (*ResponseDataValueList, error)
 	GetData(context.Context, *RequestDataKey) (*ResponseDataValue, error)
 	SetData(context.Context, *RequestDataKeyValue) (*ResponseEmpty, error)
 	mustEmbedUnimplementedDataServiceServer()
@@ -65,6 +76,9 @@ type DataServiceServer interface {
 type UnimplementedDataServiceServer struct {
 }
 
+func (UnimplementedDataServiceServer) GetsData(context.Context, *RequestDataKeyList) (*ResponseDataValueList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetsData not implemented")
+}
 func (UnimplementedDataServiceServer) GetData(context.Context, *RequestDataKey) (*ResponseDataValue, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetData not implemented")
 }
@@ -82,6 +96,24 @@ type UnsafeDataServiceServer interface {
 
 func RegisterDataServiceServer(s grpc.ServiceRegistrar, srv DataServiceServer) {
 	s.RegisterService(&DataService_ServiceDesc, srv)
+}
+
+func _DataService_GetsData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestDataKeyList)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).GetsData(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/speedup.DataService/GetsData",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).GetsData(ctx, req.(*RequestDataKeyList))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _DataService_GetData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -127,6 +159,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "speedup.DataService",
 	HandlerType: (*DataServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetsData",
+			Handler:    _DataService_GetsData_Handler,
+		},
 		{
 			MethodName: "GetData",
 			Handler:    _DataService_GetData_Handler,

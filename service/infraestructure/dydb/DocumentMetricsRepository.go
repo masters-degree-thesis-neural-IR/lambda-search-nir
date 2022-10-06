@@ -1,7 +1,6 @@
 package dydb
 
 import (
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -12,37 +11,38 @@ import (
 )
 
 type DocumentMetricsRepository struct {
-	Cache      map[string]*domain.NormalizedDocument
-	AwsSession *session.Session
-	TableName  string
+	AwsSession       *session.Session
+	TableName        string
+	MemoryRepository repositories.IndexMemoryRepository
 }
 
-func NewDocumentMetricsRepository(awsSession *session.Session, tableName string) repositories.DocumentMetricsRepository {
+func NewDocumentMetricsRepository(awsSession *session.Session, tableName string, memoryRepository repositories.IndexMemoryRepository) repositories.DocumentMetricsRepository {
 	return DocumentMetricsRepository{
-		AwsSession: awsSession,
-		TableName:  tableName,
-		Cache:      make(map[string]*domain.NormalizedDocument),
+		AwsSession:       awsSession,
+		TableName:        tableName,
+		MemoryRepository: memoryRepository,
 	}
 }
 
 func (d DocumentMetricsRepository) FindByDocumentIDs(documentIDs map[string]int8) ([]domain.NormalizedDocument, error) {
 
-	var normalizedDocuments []domain.NormalizedDocument
-	nocache := make([]string, 0)
+	var normalizedDocuments, notfound, err = d.MemoryRepository.LoadMetricsFromCache(documentIDs)
+	if err != nil {
+		return nil, err
+	}
 
-	//verify documents in local cache
-	for id, _ := range documentIDs {
-		document := d.Cache[id]
-		if document != nil {
-			normalizedDocuments = append(normalizedDocuments, *document)
-		} else {
-			nocache = append(nocache, id)
-		}
+	nocache := make([]string, 0)
+	for id, _ := range notfound {
+		nocache = append(nocache, id)
 	}
 
 	paginator := Paginator(nocache, 100)
 
 	for _, page := range paginator {
+
+		if len(page) == 0 {
+			continue
+		}
 
 		var filter = expression.Name("Id").Equal(expression.Value(page[0]))
 		for _, id := range page[1:] {
@@ -52,7 +52,7 @@ func (d DocumentMetricsRepository) FindByDocumentIDs(documentIDs map[string]int8
 		expr, err := expression.NewBuilder().WithFilter(filter).Build()
 
 		if err != nil {
-			println(err.Error())
+			return nil, err
 		}
 
 		params := &dynamodb.ScanInput{
@@ -66,18 +66,17 @@ func (d DocumentMetricsRepository) FindByDocumentIDs(documentIDs map[string]int8
 		svc := dynamodb.New(d.AwsSession)
 		result, err := svc.Scan(params)
 		if err != nil {
-			println(err.Error())
+			return nil, err
 		}
 
 		for _, item := range result.Items {
 			var normalizedDocument domain.NormalizedDocument
 			err = dynamodbattribute.UnmarshalMap(item, &normalizedDocument)
 			if err != nil {
-				fmt.Printf("Deu erro %v", err)
 				return nil, err
 			}
 
-			d.Cache[normalizedDocument.Id] = &normalizedDocument
+			d.MemoryRepository.Save("metrics"+normalizedDocument.Id, normalizedDocument)
 			normalizedDocuments = append(normalizedDocuments, normalizedDocument)
 		}
 

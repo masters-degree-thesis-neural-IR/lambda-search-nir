@@ -41,9 +41,9 @@ func NotContains(documentID string, documents []string) bool {
 
 func RemoveAccents(s string) string {
 	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
-	output, _, e := transform.String(t, s)
-	if e != nil {
-		panic(e)
+	output, _, err := transform.String(t, s)
+	if err != nil {
+		log.Fatal(err)
 	}
 	return output
 }

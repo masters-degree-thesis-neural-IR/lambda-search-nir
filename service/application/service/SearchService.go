@@ -7,6 +7,7 @@ import (
 	"lambda-search-nir/service/application/nlp"
 	"lambda-search-nir/service/application/repositories"
 	"lambda-search-nir/service/application/usecases"
+	"time"
 )
 
 type Search struct {
@@ -82,9 +83,11 @@ func (s Search) FindDocuments(localQuery []string) map[string]int8 {
 func (s Search) LexicalSearch(query string) ([]domain.ScoreResult, error) {
 
 	s.Logger.Info("LexicalSearch")
-
+	start := time.Now()
 	localQuery := nlp.Tokenizer(query, true) //nlp.RemoveStopWords(nlp.Tokenizer(query, true), "en")
 	foundDocuments := s.FindDocuments(localQuery)
+	duration := time.Since(start)
+	s.Logger.Info("Duração: ", duration)
 
 	invertedIndex, err := s.MakeInvertedIndex(localQuery, foundDocuments)
 

@@ -1,18 +1,16 @@
 package dydb
 
 import (
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 	"lambda-search-nir/service/application/domain"
 	"lambda-search-nir/service/application/repositories"
+	"sync"
 )
 
 type DocumentRepository struct {
-	Cache      map[string]*domain.Document
 	AwsSession *session.Session
 	TableName  string
 }
@@ -21,63 +19,54 @@ func NewDocumentRepository(awsSession *session.Session, tableName string) reposi
 	return DocumentRepository{
 		AwsSession: awsSession,
 		TableName:  tableName,
-		Cache:      make(map[string]*domain.Document),
 	}
+}
+
+func (d DocumentRepository) LoadDocument(id string) domain.Document {
+
+	svc := dynamodb.New(d.AwsSession)
+	result, _ := svc.GetItem(&dynamodb.GetItemInput{
+		TableName: aws.String(d.TableName),
+		Key: map[string]*dynamodb.AttributeValue{
+			"Id": {
+				S: aws.String(id),
+			},
+		},
+	})
+
+	document := domain.Document{}
+	_ = dynamodbattribute.UnmarshalMap(result.Item, &document)
+
+	return document
+
 }
 
 func (d DocumentRepository) FindByDocumentIDs(documentIDs []string) (map[string]domain.Document, error) {
 
 	documents := make(map[string]domain.Document)
-	var nocache []string
 
-	fmt.Printf("Documents IDs %v\n", len(documentIDs))
+	documentIDs = append(documentIDs, "drt")
 
-	//verify documents in local cache
+	var wg sync.WaitGroup
+	wg.Add(len(documentIDs))
+
+	mutex := sync.RWMutex{}
+
 	for _, id := range documentIDs {
 
-		document := d.Cache[id]
-		if document != nil {
-			documents[id] = *document
-		} else {
-			nocache = append(nocache, id)
-		}
+		go func(id string) {
+			defer wg.Done()
+			doc := d.LoadDocument(id)
+
+			println(doc.Id)
+
+			mutex.Lock()
+			documents[doc.Id] = doc
+			mutex.Unlock()
+		}(id)
 	}
 
-	var filter = expression.Name("Id").Equal(expression.Value(nocache[0]))
-	for _, id := range nocache[1:] {
-		filter = filter.Or(expression.Name("Id").Equal(expression.Value(id)))
-	}
-
-	expr, err := expression.NewBuilder().WithFilter(filter).Build()
-
-	if err != nil {
-		println(err.Error())
-	}
-
-	params := &dynamodb.ScanInput{
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: expr.Values(),
-		FilterExpression:          expr.Filter(),
-		ProjectionExpression:      expr.Projection(),
-		TableName:                 aws.String(d.TableName),
-	}
-
-	svc := dynamodb.New(d.AwsSession)
-	result, err := svc.Scan(params)
-	if err != nil {
-		println(err.Error())
-	}
-
-	for _, item := range result.Items {
-		document := domain.Document{}
-		err = dynamodbattribute.UnmarshalMap(item, &document)
-		if err != nil {
-			return nil, err
-		}
-
-		d.Cache[document.Id] = &document
-		documents[document.Id] = document
-	}
+	wg.Wait()
 
 	return documents, nil
 

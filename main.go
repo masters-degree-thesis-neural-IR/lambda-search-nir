@@ -7,8 +7,6 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 	"lambda-search-nir/service/application/domain"
 	"lambda-search-nir/service/application/exception"
 	"lambda-search-nir/service/application/logger"
@@ -30,6 +28,7 @@ var AwsRegion string
 var documentMetricsRepository repositories.DocumentMetricsRepository
 var documentRepository repositories.DocumentRepository
 var log logger.Logger
+var memoryRepository repositories.IndexMemoryRepository
 
 func ErrorHandler(err error) events.APIGatewayProxyResponse {
 
@@ -88,7 +87,6 @@ func makeBody(documentResults []domain.DocumentResult, duration time.Duration) (
 
 func handler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	memoryRepository := memory.NewSpeedupRepository()
 	documentService := service.NewDocumentService(log, documentRepository)
 	searchService := service.NewSearchService(log, documentMetricsRepository, memoryRepository, documentRepository)
 	controller := controller.NewController(documentService, searchService)
@@ -131,6 +129,7 @@ func handler(req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse,
 
 func main() {
 
+	host := "172.31.2.165:9000"
 	AwsRegion = "us-east-1"
 	TableDocument = "NIR_Document"
 	TableMetrics = "NIR_Metrics"
@@ -144,14 +143,16 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	documentMetricsRepository = dydb.NewDocumentMetricsRepository(awsSession, TableMetrics)
+	memoryRepository = memory.NewSpeedupRepository(host)
+	documentMetricsRepository = dydb.NewDocumentMetricsRepository(awsSession, TableMetrics, memoryRepository)
 	documentRepository = dydb.NewDocumentRepository(awsSession, TableDocument)
 
 	lambda.Start(handler)
 }
 
-func mainrrt() {
+func mainert() {
 
+	host := "ec2-34-239-251-75.compute-1.amazonaws.com:9000"
 	AwsRegion = "us-east-1"
 	TableDocument = "NIR_Document"
 	TableMetrics = "NIR_Metrics"
@@ -164,11 +165,9 @@ func mainrrt() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-
-	documentMetricsRepository = dydb.NewDocumentMetricsRepository(awsSession, TableMetrics)
+	memoryRepository := memory.NewSpeedupRepository(host)
+	documentMetricsRepository = dydb.NewDocumentMetricsRepository(awsSession, TableMetrics, memoryRepository)
 	documentRepository = dydb.NewDocumentRepository(awsSession, TableDocument)
-
-	memoryRepository := memory.NewSpeedupRepository()
 	documentService := service.NewDocumentService(log, documentRepository)
 	searchService := service.NewSearchService(log, documentMetricsRepository, memoryRepository, documentRepository)
 	controller := controller.NewController(documentService, searchService)
@@ -177,7 +176,11 @@ func mainrrt() {
 
 	documentResults, err := controller.SearchDocuments(query)
 
-	fmt.Printf("Result %v", documentResults)
+	for _, v := range documentResults {
+		println("ID", v.Document.Id)
+	}
+
+	//fmt.Printf("Result %v", documentResults)
 
 }
 
@@ -211,7 +214,7 @@ func Paginator(ids []string, ln int) [][]string {
 	return list
 }
 
-func mainrt() {
+func mainrdt() {
 
 	ids := []string{"100", "20", "2", "154", "145", "12", "47", "987", "12", "14", "2", "5", "69", "70", "45"}
 
@@ -220,58 +223,10 @@ func mainrt() {
 
 }
 
-func mainxxx() {
+func mainrt() {
 
 	AwsRegion = "us-east-1"
 	TableDocument = "NIR_Document"
 	TableMetrics = "NIR_Metrics"
 
-	awsSession, _ := session.NewSession(&aws.Config{
-		Region: aws.String(AwsRegion)},
-	)
-
-	svc := dynamodb.New(awsSession)
-
-	//ids := []string{"10", "20", "30", "150"}
-
-	//exps := make([]expression.ConditionBuilder, len(ids))
-	//for i, id := range ids {
-	//	xp := expression.Name("Id").Equal(expression.Value(id))
-	//
-	//	xs := expression.Or(expression.Name("Id").Equal(expression.Value("20")),
-	//		expression.Name("Id").Equal(expression.Value("20")))
-	//
-	//	exps[i] = xs
-	//}
-
-	//xx := expression.Or(, expression.Name("Id").LessThan(expression.Value("8")))
-
-	var filt = expression.Name("Id").Equal(expression.Value("500"))
-	filt = filt.Or(expression.Name("Id").Equal(expression.Value("20")))
-	filt = filt.Or(expression.Name("Id").Equal(expression.Value("30")))
-
-	expr, err := expression.NewBuilder().WithFilter(filt).Build()
-
-	if err != nil {
-		println(err.Error())
-	}
-
-	//println()
-
-	//Id := aws.String("Id")
-
-	params := &dynamodb.ScanInput{
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: expr.Values(),
-		FilterExpression:          expr.Filter(),
-		ProjectionExpression:      expr.Projection(),
-		TableName:                 aws.String(TableMetrics),
-	}
-
-	result, err := svc.Scan(params)
-	if err != nil {
-		println(err.Error())
-	}
-
-	println(len(result.Items))
 }

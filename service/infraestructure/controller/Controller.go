@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"lambda-search-nir/service/application/domain"
 	"lambda-search-nir/service/application/usecases"
 )
@@ -23,6 +24,11 @@ func (c *Controller) SearchDocuments(query string) ([]domain.DocumentResult, err
 	scoreResult, err := c.Search.LexicalSearch(query)
 	if err != nil {
 		return []domain.DocumentResult{}, err
+	}
+
+	for _, res := range scoreResult {
+		println(res.DocumentID)
+		fmt.Printf("%v\n", res.Similarity)
 	}
 
 	return c.DocumentService.LoadDocuments(scoreResult)
